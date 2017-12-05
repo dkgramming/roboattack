@@ -6,11 +6,20 @@
 
 #include <mpi.h>
 #include <stdio.h>
+#include <stdbool.h>
+#include <stdlib.h>
 
 struct Vec2 {
     int x;
     int y;
 };
+
+bool isAdjacent(struct Vec2 a, struct Vec2 b) {
+  int xDiff = abs(a.x - b.y);
+  int yDiff = abs(a.y - b.y);
+
+  return (xDiff <= 1 && yDiff <= 1); 
+}
 
 int main() {
     MPI_Init(NULL, NULL);
@@ -39,6 +48,9 @@ int main() {
     pos[4].y = 0;
 
     printf("P%i: (%i, %i) Target: (%i, %i)\n", rank, pos[rank].x, pos[rank].y, target.x, target.y);
+    if (isAdjacent(pos[rank], target)) {
+        printf("P%i: Elect me as your leader!\n", rank);
+    }
 
     MPI_Finalize();
 }
