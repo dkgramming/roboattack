@@ -76,35 +76,46 @@ int main() {
     int leader_rank = -1; // no leader
     int my_distance = manhattan_distance(pos[rank][X], pos[rank][Y], target[X], target[Y]); 
 
-    MPI_Sendrecv(&data_to_send, TRIPLE, MPI_INT, destination_ID, ELECTION_TAG,
-        &received_data, TRIPLE, MPI_INT, sender_ID, ELECTION_TAG, 
-        MPI_COMM_WORLD, &status);
-
-    printf("P%i votes for P%i\n", sender_ID, received_data[0]);
-
-    /* Receive election message */
-    if (received_data[TAG] == ELECTION_TAG) {
-        if (received_data[0] > rank) {
-            // election(received_data[0]);
-            data_to_send[0] = received_data[0];
-        }
-        if (rank > received_data[0]) {
-            // election(rank);
-            data_to_send[0] = rank;
-        }
-        if (rank == received_data[0]) {
-            data_to_send[0] = rank;
-            data_to_send[2] = true;
-            printf("P%i has been elected\n", rank);
-            // leader(rank);
-        }
+    /* Process 0 gets the honor of starting the election */
+    if (rank == 0) {
+        MPI_Send(&data_to_send, TRIPLE, MPI_INT, destination_ID, ELECTION_TAG, MPI_COMM_WORLD);
     }
-    /* Receive leader message */
-    if (received_data[TAG] == LEADER_TAG) {
-        if (received_data[0] != rank) {
-            data_to_send[0] = received_data[0];
-            data_to_send[2] = true;
-            printf("P%i heard that P%i has been elected\n", rank, data_to_send[0]);
+
+    /* Continue receiving messages until leader is chosen */
+    while (leader_rank == -1) {
+        MPI_Recv(&received_data, TRIPLE, MPI_INT, sender_ID, ELECTION_TAG,
+            MPI_COMM_WORLD, &status);
+
+
+        /* Receive election message */
+        if (received_data[TAG] == ELECTION_TAG) {
+            printf("P%i votes for P%i\n", sender_ID, received_data[0]);
+
+            if (received_data[0] > rank) {
+                // election(received_data[0]);
+                data_to_send[0] = received_data[0];
+            }
+            if (rank > received_data[0]) {
+                // election(rank);
+                data_to_send[0] = rank;
+            }
+            if (rank == received_data[0]) {
+                data_to_send[0] = rank;
+                data_to_send[2] = true;
+                printf("P%i has been elected\n", rank);
+                // leader(rank);
+            }
+            MPI_Send(&data_to_send, TRIPLE, MPI_INT, destination_ID, ELECTION_TAG, MPI_COMM_WORLD);
+        }
+        /* Receive leader message */
+        if (received_data[TAG] == LEADER_TAG) {
+            if (received_data[0] != rank) {
+                data_to_send[0] = received_data[0];
+                data_to_send[2] = true;
+                printf("P%i heard that P%i has been elected\n", rank, data_to_send[0]);
+            }
+            MPI_Send(&data_to_send, TRIPLE, MPI_INT, destination_ID, ELECTION_TAG, MPI_COMM_WORLD);
+            leader_rank = received_data[RANK];
         }
     }
 
