@@ -57,12 +57,15 @@ int main() {
 
     printf("P%i: (%i, %i) Target: (%i, %i)\n", rank, pos[rank].x, pos[rank].y, target.x, target.y);
 
-    int data_to_send = (int)isAdjacent(pos[rank], target);
-    int send_count = 1;
+    int data_to_send[2] = {
+      (int)isAdjacent(pos[rank], target),
+      rank
+    };
+    int send_count = 2;
     MPI_Datatype send_type = MPI_INT;
     int destination_ID = (rank + 1) % world;
     int send_tag = 42; // arbritrary currently
-    int received_data;
+    int received_data[2];
     int receive_count = send_count;
     MPI_Datatype receive_type = send_type;
     int sender_ID = (rank - 1) % world;
@@ -71,14 +74,38 @@ int main() {
     MPI_Comm comm = MPI_COMM_WORLD;
     MPI_Status status; // TODO: Figure this guy out
 
-    MPI_Sendrecv(&data_to_send, send_count, send_type, destination_ID, send_tag,
-      &received_data, receive_count, receive_type, sender_ID, receive_tag, 
-      comm, &status);
+    bool received_truth = false;
+    bool sent_truth = false;
 
-    if (received_data == 1) {
-        printf("P%i is our lord and savior!\n", sender_ID);
-    } else {
-        printf("P%i is a false prophet!\n", sender_ID);
+    /**
+     * Attempt to get consensus
+     */
+    while(!received_truth || !sent_truth) {
+        if (received_truth && sent_truth) {
+            break;
+        }
+        if (received_truth) {
+            MPI_Send(&data_to_send, send_count, send_type, destination_ID, send_tag, comm);
+        } else if (sent_truth) {
+            MPI_Recv(&data_to_send, send_count, send_type, destination_ID, send_tag, comm, &status);
+        } else {
+            MPI_Sendrecv(&data_to_send, send_count, send_type, destination_ID, send_tag,
+              &received_data, receive_count, receive_type, sender_ID, receive_tag, 
+              comm, &status);
+        }
+
+        if (data_to_send[0] == 1) {
+            sent_truth = true;
+        }
+
+        if (received_data[0] == 1) {
+            received_truth = true;
+            data_to_send[0] = received_data[0];
+            data_to_send[1] = received_data[1];
+            printf("P%i is our lord and savior!\n", received_data[1]);
+        } else {
+            printf("P%i is a false prophet!\n", received_data[1]);
+        }
     }
 
     MPI_Finalize();
