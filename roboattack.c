@@ -9,58 +9,49 @@
 #include <stdbool.h>
 #include <stdlib.h>
 
-/**
- * 2D Vector
- */
-struct Vec2 {
-    int x;
-    int y;
-};
+const int WIDTH = 10;
+const int HEIGHT = 10;
 
-/**
- * Are two position vectors adjacent to one another?
- * Returns true if x and y differ by at most 1.
- */
-bool isAdjacent(struct Vec2 a, struct Vec2 b) {
-    int xDiff = abs(a.x - b.y);
-    int yDiff = abs(a.y - b.y);
+const int RANK = 0;
+const int DISTANCE = 1;
 
-    return (xDiff <= 1 && yDiff <= 1); 
-}
+const int X = 0;
+const int Y = 1;
+const int TUPLE = 2;
 
 int main() {
+    /* Initialize MPI */
     MPI_Init(NULL, NULL);
     int rank;
     int world;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &world);
 
+    /* Initialize the robot's view of the world */
+    int grid[HEIGHT][WIDTH];
 
-    struct Vec2 target;
-    target.x = 3; target.y = 3;
+    /* Pretend the target location and robot locations are known */
+    int target[TUPLE];
+    target[X] = 3; target[Y] = 3;
+    int pos[world][TUPLE];
+    pos[0][X] = 3;
+    pos[0][Y] = 4;
 
-    struct Vec2 pos[6]; // disregard 0-th index
-    pos[0].x = 3;
-    pos[0].y = 4;
+    pos[1][X] = 6;
+    pos[1][Y] = 1;
 
-    pos[1].x = 6;
-    pos[1].y = 1;
+    pos[2][X] = 5;
+    pos[2][Y] = 7;
 
-    pos[2].x = 5;
-    pos[2].y = 7;
+    pos[3][X] = 0;
+    pos[3][Y] = 6;
 
-    pos[3].x = 0;
-    pos[3].y = 6;
+    pos[4][X] = 2;
+    pos[4][Y] = 0;
 
-    pos[4].x = 2;
-    pos[4].y = 0;
+    printf("P%i: (%i, %i) Target: (%i, %i)\n", rank, pos[rank][X], pos[rank][Y], target[X], target[Y]);
 
-    printf("P%i: (%i, %i) Target: (%i, %i)\n", rank, pos[rank].x, pos[rank].y, target.x, target.y);
-
-    int data_to_send[2] = {
-      (int)isAdjacent(pos[rank], target),
-      rank
-    };
+    int data_to_send[2] = { false, rank };
     int send_count = 2;
     MPI_Datatype send_type = MPI_INT;
     int destination_ID = (rank + 1) % world;
@@ -73,40 +64,6 @@ int main() {
     int receive_tag = send_tag;
     MPI_Comm comm = MPI_COMM_WORLD;
     MPI_Status status; // TODO: Figure this guy out
-
-    bool received_truth = false;
-    bool sent_truth = false;
-
-    /**
-     * Attempt to get consensus
-     */
-    while(!received_truth || !sent_truth) {
-        if (received_truth && sent_truth) {
-            break;
-        }
-        if (received_truth) {
-            MPI_Send(&data_to_send, send_count, send_type, destination_ID, send_tag, comm);
-        } else if (sent_truth) {
-            MPI_Recv(&data_to_send, send_count, send_type, destination_ID, send_tag, comm, &status);
-        } else {
-            MPI_Sendrecv(&data_to_send, send_count, send_type, destination_ID, send_tag,
-              &received_data, receive_count, receive_type, sender_ID, receive_tag, 
-              comm, &status);
-        }
-
-        if (data_to_send[0] == 1) {
-            sent_truth = true;
-        }
-
-        if (received_data[0] == 1) {
-            received_truth = true;
-            data_to_send[0] = received_data[0];
-            data_to_send[1] = received_data[1];
-            printf("P%i is our lord and savior!\n", received_data[1]);
-        } else {
-            printf("P%i is a false prophet!\n", received_data[1]);
-        }
-    }
 
     MPI_Finalize();
 }
