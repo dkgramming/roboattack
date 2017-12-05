@@ -9,16 +9,23 @@
 #include <stdbool.h>
 #include <stdlib.h>
 
+/**
+ * 2D Vector
+ */
 struct Vec2 {
     int x;
     int y;
 };
 
+/**
+ * Are two position vectors adjacent to one another?
+ * Returns true if x and y differ by at most 1.
+ */
 bool isAdjacent(struct Vec2 a, struct Vec2 b) {
-  int xDiff = abs(a.x - b.y);
-  int yDiff = abs(a.y - b.y);
+    int xDiff = abs(a.x - b.y);
+    int yDiff = abs(a.y - b.y);
 
-  return (xDiff <= 1 && yDiff <= 1); 
+    return (xDiff <= 1 && yDiff <= 1); 
 }
 
 int main() {
