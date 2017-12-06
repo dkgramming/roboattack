@@ -74,7 +74,9 @@ int main() {
     sender_ID = (sender_ID < 0) ? sender_ID + world : sender_ID; // modulus isn't perfect
     MPI_Status status; // TODO: Figure this guy out
 
-    /* Begin leader election */
+    /** 
+     * Begin leader election 
+     */
     int leader_rank = -1; // no leader
     int my_distance = manhattan_distance(pos[rank][X], pos[rank][Y], target[X], target[Y]); 
 
@@ -120,6 +122,26 @@ int main() {
             leader_rank = received_data.rank;
         }
     }
+
+    /**
+     * Coordinate the target surround process
+     */
+    int destinations[5*TUPLE] = {
+        3,4,
+        4,3,
+        4,4,
+        2,3,
+        3,2
+    };
+    int destination[TUPLE];
+    if (rank == leader_rank) {
+        /* Allow the elected leader to decide each robot's destination cell */
+        for (int i = 0; i < 5*TUPLE; i++)
+            destinations[i] = i; // completely arbitrary right now
+    } 
+    /* All other robots await the leader's broadcast */ 
+    MPI_Scatter(&destinations, TUPLE, MPI_INT, &destination, TUPLE, MPI_INT, leader_rank, MPI_COMM_WORLD);
+    printf("P%i instructed P%i to move to (%i, %i)\n", leader_rank, rank, destination[X], destination[Y]);
 
     MPI_Finalize();
 }
