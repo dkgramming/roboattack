@@ -8,6 +8,9 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include <stdlib.h>
+#include <math.h>
+
+#define DBL_EPSILON 2.2204460492503131e-16
 
 const int NOT_ZERO = 42;
 
@@ -30,6 +33,14 @@ const int LEADER_TAG = 1;
 
 int manhattan_distance(int x1, int y1, int x2, int y2) {
     return (abs(x2-x1) + abs(y2-y1));
+}
+
+double euclidian_distance(int x1, int y1, int x2, int y2) {
+    return sqrt(pow(x2-x1, 2) + pow(y2-y1, 2));
+}
+
+bool fequal(double a, double b) {
+    return fabs(a-b) < DBL_EPSILON;
 }
 
 int main() {
@@ -128,16 +139,39 @@ int main() {
     /**
      * Coordinate the target surround process
      */
-    int destinations[5*TUPLE] = {
-        3,4,
-        4,3,
-        4,4,
-        2,3,
-        3,2
-    };
+    int destinations[5*TUPLE]; // TODO: Replace magic number 
     int destination[TUPLE];
     if (rank == leader_rank) {
         /* Allow the elected leader to decide each robot's destination cell */
+        int pid = 0;
+        double distance = 1.0;
+        int x_pos;
+        int y_pos;
+        int a = 1;
+        int b = 0;
+        while (pid < world) {
+            distance = euclidian_distance(0, 0, a, b);
+
+            for (int x_offset = -distance; x_offset <= distance && pid < world; x_offset++) {
+                for (int y_offset = -distance; y_offset <= distance && pid < world; y_offset++) {
+                    x_pos = target[X] + x_offset;
+                    y_pos = target[Y] + y_offset;
+                    if (fequal(distance, euclidian_distance(x_pos, y_pos, target[X], target[Y]))) {
+                        printf("P%i has been assigned to (%i, %i)\n", pid, x_pos, y_pos);
+                        destinations[2*pid] = x_pos;
+                        destinations[2*pid+1] = y_pos;
+                        pid++;
+                    }
+                }
+            }
+            /* Extend search to next "ring" around the target */
+            if (a > b)
+                b++;
+            else {
+                a++;
+                b = 0;
+            }
+        }
     } 
     /* All other robots await the leader's broadcast */ 
     MPI_Scatter(&destinations, TUPLE, MPI_INT, &destination, TUPLE, MPI_INT, leader_rank, MPI_COMM_WORLD);
