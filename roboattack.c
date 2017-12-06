@@ -9,6 +9,8 @@
 #include <stdbool.h>
 #include <stdlib.h>
 
+const int NOT_ZERO = 42;
+
 const int WIDTH = 10;
 const int HEIGHT = 10;
 
@@ -26,7 +28,7 @@ struct Message {
 const int ELECTION_TAG = 0;
 const int LEADER_TAG = 1;
 
-int manhattan_distance(int x1, int x2, int y1, int y2) {
+int manhattan_distance(int x1, int y1, int x2, int y2) {
     return (abs(x2-x1) + abs(y2-y1));
 }
 
@@ -136,12 +138,45 @@ int main() {
     int destination[TUPLE];
     if (rank == leader_rank) {
         /* Allow the elected leader to decide each robot's destination cell */
-        for (int i = 0; i < 5*TUPLE; i++)
-            destinations[i] = i; // completely arbitrary right now
     } 
     /* All other robots await the leader's broadcast */ 
     MPI_Scatter(&destinations, TUPLE, MPI_INT, &destination, TUPLE, MPI_INT, leader_rank, MPI_COMM_WORLD);
     printf("P%i instructed P%i to move to (%i, %i)\n", leader_rank, rank, destination[X], destination[Y]);
+
+    /**
+     * Move to the destination
+     */
+    int diff = manhattan_distance(pos[rank][X], pos[rank][Y], destination[X], destination[Y]);
+    int total_diff = NOT_ZERO; 
+    
+    while (total_diff != 0) {
+        /* Sum all robots' distance from their destination */
+        MPI_Allreduce(&diff, &total_diff, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
+
+        /* Move towards the destination if not there already */
+        if (diff != 0) {
+            if (pos[rank][X] < destination[X]) { // TODO: toggle x and y
+                pos[rank][X]++; // DOWN
+                printf("P%i moved DOWN to (%i, %i) en route to (%i, %i)\n", 
+                    rank, pos[rank][X], pos[rank][Y], destination[X], destination[Y]);
+            } else if (pos[rank][Y] < destination[Y]) {
+                pos[rank][Y]++; // RIGHT
+                printf("P%i moved RIGHT to (%i, %i) en route to (%i, %i)\n", 
+                    rank, pos[rank][X], pos[rank][Y], destination[X], destination[Y]);
+            } else if (pos[rank][X] > destination[X]) {
+                pos[rank][X]--; // UP
+                printf("P%i moved UP to (%i, %i) en route to (%i, %i)\n",
+                    rank, pos[rank][X], pos[rank][Y], destination[X], destination[Y]);
+            } else if (pos[rank][Y] > destination[Y]) {
+                pos[rank][Y]--; // LEFT
+                printf("P%i moved LEFT to (%i, %i) en route to (%i, %i)\n", 
+                    rank, pos[rank][X], pos[rank][Y], destination[X], destination[Y]);
+            }  
+
+            diff = manhattan_distance(pos[rank][X], pos[rank][Y], destination[X], destination[Y]);
+            printf("P%i is %i cells from its destination\n", rank, diff);
+        }
+    }
 
     MPI_Finalize();
 }
