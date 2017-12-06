@@ -9,6 +9,7 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <math.h>
+#include <limits.h>
 
 #define DBL_EPSILON 2.2204460492503131e-16
 
@@ -56,7 +57,7 @@ int main() {
 
     /* Pretend the target location and robot locations are known */
     int target[TUPLE];
-    target[X] = 3; target[Y] = 3;
+    target[X] = 0; target[Y] = 3;
     int pos[world][TUPLE];
     pos[0][X] = 3;
     pos[0][Y] = 4;
@@ -143,24 +144,37 @@ int main() {
     int destination[TUPLE];
     if (rank == leader_rank) {
         /* Allow the elected leader to decide each robot's destination cell */
-        int pid = 0;
+        int num_assignments= 0;
         double distance = 1.0;
-        int x_pos;
-        int y_pos;
         int a = 1;
         int b = 0;
-        while (pid < world) {
+        bool is_assigned[5];
+        while (num_assignments < world) {
             distance = euclidian_distance(0, 0, a, b);
 
-            for (int x_offset = -distance; x_offset <= distance && pid < world; x_offset++) {
-                for (int y_offset = -distance; y_offset <= distance && pid < world; y_offset++) {
-                    x_pos = target[X] + x_offset;
-                    y_pos = target[Y] + y_offset;
-                    if (fequal(distance, euclidian_distance(x_pos, y_pos, target[X], target[Y]))) {
-                        printf("P%i has been assigned to (%i, %i)\n", pid, x_pos, y_pos);
-                        destinations[2*pid] = x_pos;
-                        destinations[2*pid+1] = y_pos;
-                        pid++;
+            for (int x_offset = -distance; x_offset <= distance && num_assignments < world; x_offset++) {
+                for (int y_offset = -distance; y_offset <= distance && num_assignments < world; y_offset++) {
+                    int x_pos = target[X] + x_offset;
+                    int y_pos = target[Y] + y_offset;
+                    bool close_enough = fequal(distance, euclidian_distance(x_pos, y_pos, target[X], target[Y]));
+                    bool within_grid = x_pos >= 0 && x_pos < HEIGHT && y_pos >= 0 && y_pos < WIDTH;
+                    if (close_enough && within_grid) {
+                        /* Pick the closest unassigned robot */
+                        int closest_pid = -1;
+                        int min_dist = INT_MAX;
+                        for (int pid = 0; pid < world; pid++) {
+                            int distance = manhattan_distance(pos[pid][X], pos[pid][Y], x_pos, y_pos);
+                            if (!is_assigned[pid] && distance < min_dist) {
+                                min_dist = distance;
+                                closest_pid = pid;
+                            }
+                        }
+
+                        printf("P%i has been assigned to (%i, %i)\n", closest_pid, x_pos, y_pos);
+                        destinations[2*closest_pid] = x_pos;
+                        destinations[2*closest_pid+1] = y_pos;
+                        num_assignments++;
+                        is_assigned[closest_pid] = true;
                     }
                 }
             }
