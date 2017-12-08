@@ -22,6 +22,11 @@ const int HEIGHT = 50;
 const int X = 0;
 const int Y = 1;
 const int UNKNOWN = -1;
+#define UP 0
+#define RIGHT 1
+#define DOWN 2
+#define LEFT 3
+
 #define TUPLE 2
 #define TRIPLE 3
 
@@ -44,6 +49,10 @@ double euclidian_distance(int x1, int y1, int x2, int y2) {
 
 bool fequal(double a, double b) {
     return fabs(a-b) < DBL_EPSILON;
+}
+
+bool can_see_target(int robot_x, int robot_y, int target_x, int target_y) {
+    return abs(robot_x - target_x) <= 1 && abs(robot_y - target_y) <= 1;
 }
 
 int main() {
@@ -142,6 +151,68 @@ int main() {
     /**
      * Search for the target
      */
+    int future_pos[5*TUPLE];
+    int my_future_pos[TUPLE];
+
+    while (target[X] == UNKNOWN || target[Y] == UNKNOWN) {
+
+        /* By default, no movement */
+        future_pos[2*rank] = pos[rank][X];
+        future_pos[2*rank+1] = pos[rank][Y];
+
+        /* Do a random walk */
+        int direction = rand() % 4; // 4 cardinal directions 
+        switch(direction) {
+        case DOWN:
+            future_pos[2*rank] = pos[rank][X] + 1;
+            break;
+        case RIGHT:
+            future_pos[2*rank+1] = pos[rank][Y] + 1;
+            break;
+        case UP:
+            future_pos[2*rank] = pos[rank][X] - 1;
+            break;
+        case LEFT:
+            future_pos[2*rank+1] = pos[rank][Y] - 1;
+            break;
+        }
+
+        /* Detect collisions in future position */
+        my_future_pos[X] = future_pos[2*rank];
+        my_future_pos[Y] = future_pos[2*rank+1];
+        MPI_Allgather(&my_future_pos, TUPLE, MPI_INT, &future_pos, TUPLE, MPI_INT, MPI_COMM_WORLD);
+        
+        for (int other = 0; other < world; other++) {
+            if (rank < other &&                                 // only consider higher ranks
+                future_pos[2*rank] == future_pos[2*other] &&    // same X
+                future_pos[2*rank+1] == future_pos[2*other+1]) {    // same Y
+                
+                /* Collision detected */
+                printf("!!!P%i averted a collision with P%i!!!\n", rank, other);   
+                future_pos[2*rank] = pos[rank][X];
+                future_pos[2*rank+1] = pos[rank][Y];
+                break;  
+            }
+        }
+
+        /* Commit the movement */
+        pos[rank][X] = future_pos[2*rank];
+        pos[rank][Y] = future_pos[2*rank+1];
+
+        /* "Check" if the target is within range */
+        if (can_see_target(pos[rank][X], pos[rank][Y], actual_target[X], actual_target[Y])) {
+            printf("P%i found the target at (%i, %i)\n", rank, actual_target[X], actual_target[Y]);
+            target[X] = actual_target[X];
+            target[Y] = actual_target[Y];
+        }
+            
+        /* Let the other robots know if the target is visible */
+        int max_target[TUPLE]; // TODO: come up with a better name
+        MPI_Allreduce(&target, &max_target, TUPLE, MPI_INT, MPI_MAX, MPI_COMM_WORLD);
+
+        target[X] = max_target[X];
+        target[Y] = max_target[Y];
+    }
 
     /**
      * Coordinate the target surround process
@@ -202,8 +273,6 @@ int main() {
      */
     int diff = manhattan_distance(pos[rank][X], pos[rank][Y], destination[X], destination[Y]);
     int total_diff = NOT_ZERO; 
-    int future_pos[5*TUPLE];
-    int my_future_pos[TUPLE];
     
     while (total_diff != 0) {
         /* Sum all robots' distance from their destination */
