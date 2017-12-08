@@ -55,6 +55,10 @@ bool can_see_target(int robot_x, int robot_y, int target_x, int target_y) {
     return abs(robot_x - target_x) <= 1 && abs(robot_y - target_y) <= 1;
 }
 
+bool is_valid_pos(int x, int y) {
+    return (x >= 0 && x < HEIGHT && y >= 0 && y < WIDTH);
+}
+
 int main() {
     /* Initialize MPI */
     MPI_Init(NULL, NULL);
@@ -196,8 +200,12 @@ int main() {
         }
 
         /* Commit the movement */
-        pos[rank][X] = future_pos[2*rank];
-        pos[rank][Y] = future_pos[2*rank+1];
+        if (is_valid_pos(future_pos[2*rank], future_pos[2*rank+1])) {
+            pos[rank][X] = future_pos[2*rank];
+            pos[rank][Y] = future_pos[2*rank+1];
+        } else {
+            printf("!!!P%i averted a collision with the edge of the grid!!!\n", rank);
+        }
 
         /* "Check" if the target is within range */
         if (can_see_target(pos[rank][X], pos[rank][Y], actual_target[X], actual_target[Y])) {
