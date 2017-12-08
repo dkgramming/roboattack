@@ -54,7 +54,7 @@ int main() {
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &world);
 
-    /* See the PRNG */
+    /* Seed the PRNG */
     time_t t;
     srand((unsigned)time(&t) * rank);
 
