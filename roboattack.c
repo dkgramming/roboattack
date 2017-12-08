@@ -10,16 +10,18 @@
 #include <stdlib.h>
 #include <math.h>
 #include <limits.h>
+#include <time.h>
 
 #define DBL_EPSILON 2.2204460492503131e-16
 
 const int NOT_ZERO = 42;
 
-const int WIDTH = 10;
-const int HEIGHT = 10;
+const int WIDTH = 20;
+const int HEIGHT = 30;
 
 const int X = 0;
 const int Y = 1;
+const int UNKNOWN = -1;
 #define TUPLE 2
 #define TRIPLE 3
 
@@ -52,27 +54,22 @@ int main() {
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &world);
 
+    /* See the PRNG */
+    time_t t;
+    srand((unsigned)time(&t) * rank);
+
     /* Initialize the robot's view of the world */
     int grid[HEIGHT][WIDTH];
 
-    /* Pretend the target location and robot locations are known */
+    /* Target location is not known */
     int target[TUPLE];
-    target[X] = 0; target[Y] = 3;
+    target[X] = UNKNOWN;
+    target[Y] = UNKNOWN;
+
+    /* Randomize robot starting location */
     int pos[world][TUPLE];
-    pos[0][X] = 3;
-    pos[0][Y] = 4;
-
-    pos[1][X] = 6;
-    pos[1][Y] = 1;
-
-    pos[2][X] = 5;
-    pos[2][Y] = 7;
-
-    pos[3][X] = 0;
-    pos[3][Y] = 6;
-
-    pos[4][X] = 2;
-    pos[4][Y] = 0;
+    pos[rank][X] = rand() % HEIGHT;
+    pos[rank][Y] = rand() % WIDTH;
 
     printf("P%i: (%i, %i) Target: (%i, %i)\n", 
         rank, pos[rank][X], pos[rank][Y], target[X], target[Y]);
