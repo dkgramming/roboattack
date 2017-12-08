@@ -16,8 +16,8 @@
 
 const int NOT_ZERO = 42;
 
-const int WIDTH = 20;
-const int HEIGHT = 30;
+const int WIDTH = 30;
+const int HEIGHT = 50;
 
 const int X = 0;
 const int Y = 1;
@@ -65,6 +65,11 @@ int main() {
     int target[TUPLE];
     target[X] = UNKNOWN;
     target[Y] = UNKNOWN;
+
+    /* but technically some process has to know it */
+    int actual_target[TUPLE];
+    actual_target[X] = 5;
+    actual_target[Y] = 5;
 
     /* Randomize robot starting location */
     int pos[world][TUPLE];
@@ -135,6 +140,10 @@ int main() {
     }
 
     /**
+     * Search for the target
+     */
+
+    /**
      * Coordinate the target surround process
      */
     int destinations[5*TUPLE]; // TODO: Replace magic number 
@@ -193,34 +202,54 @@ int main() {
      */
     int diff = manhattan_distance(pos[rank][X], pos[rank][Y], destination[X], destination[Y]);
     int total_diff = NOT_ZERO; 
+    int future_pos[5*TUPLE];
+    int my_future_pos[TUPLE];
     
     while (total_diff != 0) {
         /* Sum all robots' distance from their destination */
         MPI_Allreduce(&diff, &total_diff, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
 
+        /* By default, no movement */
+        future_pos[2*rank] = pos[rank][X];
+        future_pos[2*rank+1] = pos[rank][Y];
+
         /* Move towards the destination if not there already */
         if (diff != 0) {
             if (pos[rank][X] < destination[X]) { // TODO: toggle x and y
-                pos[rank][X]++; // DOWN
-                printf("P%i moved DOWN to (%i, %i) en route to (%i, %i)\n", 
-                    rank, pos[rank][X], pos[rank][Y], destination[X], destination[Y]);
+                future_pos[2*rank] = pos[rank][X] + 1; // DOWN
             } else if (pos[rank][Y] < destination[Y]) {
-                pos[rank][Y]++; // RIGHT
-                printf("P%i moved RIGHT to (%i, %i) en route to (%i, %i)\n", 
-                    rank, pos[rank][X], pos[rank][Y], destination[X], destination[Y]);
+                future_pos[2*rank+1] = pos[rank][Y] + 1; // RIGHT
             } else if (pos[rank][X] > destination[X]) {
-                pos[rank][X]--; // UP
-                printf("P%i moved UP to (%i, %i) en route to (%i, %i)\n",
-                    rank, pos[rank][X], pos[rank][Y], destination[X], destination[Y]);
+                future_pos[2*rank] = pos[rank][X] - 1; // UP
             } else if (pos[rank][Y] > destination[Y]) {
-                pos[rank][Y]--; // LEFT
-                printf("P%i moved LEFT to (%i, %i) en route to (%i, %i)\n", 
-                    rank, pos[rank][X], pos[rank][Y], destination[X], destination[Y]);
+                future_pos[2*rank+1] = pos[rank][Y] - 1; // LEFT
             }  
-
-            diff = manhattan_distance(pos[rank][X], pos[rank][Y], destination[X], destination[Y]);
-            printf("P%i is %i cells from its destination\n", rank, diff);
         }
+
+        /* Detect collisions in future position */
+        my_future_pos[X] = future_pos[2*rank];
+        my_future_pos[Y] = future_pos[2*rank+1];
+        MPI_Allgather(&my_future_pos, TUPLE, MPI_INT, &future_pos, TUPLE, MPI_INT, MPI_COMM_WORLD);
+        
+        for (int other = 0; other < world; other++) {
+            if (rank < other &&                                 // only consider higher ranks
+                future_pos[2*rank] == future_pos[2*other] &&    // same X
+                future_pos[2*rank+1] == future_pos[2*other+1]) {    // same Y
+                
+                /* Collision detected */
+                printf("!!!P%i averted a collision with P%i!!!\n", rank, other);   
+                future_pos[2*rank] = pos[rank][X];
+                future_pos[2*rank+1] = pos[rank][Y];
+                break;  
+            }
+        }
+
+        /* Commit the movement */
+        pos[rank][X] = future_pos[2*rank];
+        pos[rank][Y] = future_pos[2*rank+1];
+            
+        diff = manhattan_distance(pos[rank][X], pos[rank][Y], destination[X], destination[Y]);
+        printf("P%i is %i cells from its destination\n", rank, diff);
     }
 
     MPI_Finalize();
