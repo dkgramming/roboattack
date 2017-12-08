@@ -14,6 +14,8 @@
 
 #define DBL_EPSILON 2.2204460492503131e-16
 
+#define ROBOT_COUNT 10
+
 const int NOT_ZERO = 42;
 
 const int WIDTH = 30;
@@ -155,7 +157,7 @@ int main() {
     /**
      * Search for the target
      */
-    int future_pos[5*TUPLE];
+    int future_pos[ROBOT_COUNT*TUPLE];
     int my_future_pos[TUPLE];
 
     while (target[X] == UNKNOWN || target[Y] == UNKNOWN) {
@@ -225,7 +227,7 @@ int main() {
     /**
      * Coordinate the target surround process
      */
-    int destinations[5*TUPLE]; // TODO: Replace magic number 
+    int destinations[ROBOT_COUNT*TUPLE]; 
     int destination[TUPLE];
     if (rank == leader_rank) {
         /* Allow the elected leader to decide each robot's destination cell */
@@ -233,7 +235,7 @@ int main() {
         double distance = 1.0;
         int a = 1;
         int b = 0;
-        bool is_assigned[5];
+        bool is_assigned[ROBOT_COUNT];
         while (num_assignments < world) {
             distance = euclidian_distance(0, 0, a, b);
 
