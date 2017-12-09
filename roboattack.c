@@ -14,12 +14,12 @@
 
 #define DBL_EPSILON 2.2204460492503131e-16
 
-#define ROBOT_COUNT 10
+#define ROBOT_COUNT 5 
 
 const int NOT_ZERO = 42;
 
-const int WIDTH = 30;
-const int HEIGHT = 50;
+const int WIDTH = 50;
+const int HEIGHT = 25;
 
 const int X = 0;
 const int Y = 1;
@@ -28,6 +28,8 @@ const int UNKNOWN = -1;
 #define RIGHT 1
 #define DOWN 2
 #define LEFT 3
+#define CLOCKWISE 1
+#define COUNTERCLOCKWISE -1
 
 #define TUPLE 2
 #define TRIPLE 3
@@ -40,6 +42,10 @@ struct Message {
 
 const int ELECTION_TAG = 0;
 const int LEADER_TAG = 1;
+
+int modulus(int a, int b) {
+    return ((a % b) + b) % b;
+}
 
 int manhattan_distance(int x1, int y1, int x2, int y2) {
     return (abs(x2-x1) + abs(y2-y1));
@@ -83,8 +89,8 @@ int main() {
 
     /* but technically some process has to know it */
     int actual_target[TUPLE];
-    actual_target[X] = 5;
-    actual_target[Y] = 5;
+    actual_target[X] = HEIGHT-1;
+    actual_target[Y] = WIDTH-1;
 
     /* Randomize robot starting location */
     int pos[world][TUPLE];
@@ -101,8 +107,7 @@ int main() {
 
     int destination_ID = (rank + 1) % world;
     struct Message received_data;
-    int sender_ID = (rank - 1) % world;
-    sender_ID = (sender_ID < 0) ? sender_ID + world : sender_ID; // modulus isn't perfect
+    int sender_ID = modulus(rank - 1, world);
     MPI_Status status; // TODO: Figure this guy out
 
     /** 
@@ -159,6 +164,9 @@ int main() {
      */
     int future_pos[ROBOT_COUNT*TUPLE];
     int my_future_pos[TUPLE];
+    int turn_counter = 0;
+    int direction = RIGHT;
+    int rotation = CLOCKWISE;
 
     while (target[X] == UNKNOWN || target[Y] == UNKNOWN) {
 
@@ -166,8 +174,15 @@ int main() {
         future_pos[2*rank] = pos[rank][X];
         future_pos[2*rank+1] = pos[rank][Y];
 
-        /* Do a random walk */
-        int direction = rand() % 4; // 4 cardinal directions 
+        if (turn_counter > 0) {
+            turn_counter--;
+
+            direction = modulus(direction + rotation, 4);
+
+            /* If turnaround has completed, turn the opposite way next time */
+            if (turn_counter == 0)
+                rotation *= -1; // reverse
+        }
         switch(direction) {
         case DOWN:
             future_pos[2*rank] = pos[rank][X] + 1;
@@ -205,8 +220,10 @@ int main() {
         if (is_valid_pos(future_pos[2*rank], future_pos[2*rank+1])) {
             pos[rank][X] = future_pos[2*rank];
             pos[rank][Y] = future_pos[2*rank+1];
+            if (rank == 0)
+                printf("P%i moves in the %i direction\n", rank, direction);
         } else {
-            printf("!!!P%i averted a collision with the edge of the grid!!!\n", rank);
+            turn_counter = 2;
         }
 
         /* "Check" if the target is within range */
