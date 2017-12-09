@@ -18,8 +18,8 @@
 
 const int NOT_ZERO = 42;
 
-const int WIDTH = 50;
-const int HEIGHT = 25;
+const int WIDTH = 15;
+const int HEIGHT = 15;
 
 const int X = 0;
 const int Y = 1;
@@ -89,8 +89,8 @@ int main() {
 
     /* but technically some process has to know it */
     int actual_target[TUPLE];
-    actual_target[X] = HEIGHT-1;
-    actual_target[Y] = WIDTH-1;
+    actual_target[X] = HEIGHT-5;
+    actual_target[Y] = 0;
 
     /* Randomize robot starting location */
     int pos[world][TUPLE];
@@ -175,13 +175,7 @@ int main() {
         future_pos[2*rank+1] = pos[rank][Y];
 
         if (turn_counter > 0) {
-            turn_counter--;
-
             direction = modulus(direction + rotation, 4);
-
-            /* If turnaround has completed, turn the opposite way next time */
-            if (turn_counter == 0)
-                rotation *= -1; // reverse
         }
         switch(direction) {
         case DOWN:
@@ -222,6 +216,12 @@ int main() {
             pos[rank][Y] = future_pos[2*rank+1];
             if (rank == 0)
                 printf("P%i moves in the %i direction\n", rank, direction);
+            if (turn_counter > 0) {
+                turn_counter--;
+                /* If turnaround has completed, turn the opposite way next time */
+                if (turn_counter == 0)
+                    rotation *= -1; // reverse
+            }
         } else {
             turn_counter = 2;
         }
@@ -346,6 +346,42 @@ int main() {
             
         diff = manhattan_distance(pos[rank][X], pos[rank][Y], destination[X], destination[Y]);
         printf("P%i is %i cells from its destination\n", rank, diff);
+    }
+
+    /* Share all robot positions with the leader */
+    int my_pos[TUPLE];
+    my_pos[X] = pos[rank][X];
+    my_pos[Y] = pos[rank][Y];
+    int all_pos[ROBOT_COUNT*TUPLE];
+    MPI_Gather(&my_pos, TUPLE, MPI_INT, &all_pos, TUPLE, MPI_INT, leader_rank, MPI_COMM_WORLD); 
+
+    /* Mark robots on the grid */
+    if (rank == leader_rank) {
+        for (int row = 0; row < HEIGHT; row++)
+            for (int col = 0; col < WIDTH; col++)
+                grid[row][col] = UNKNOWN;
+
+        for (int pid = 0; pid < world; pid++) {
+            int x = all_pos[pid*2];
+            int y = all_pos[pid*2+1];
+            grid[x][y] = pid;
+        }
+    }
+
+    /* Print the final state of the world */
+    MPI_Barrier(MPI_COMM_WORLD);
+    if (rank == leader_rank) {
+        for (int row = 0; row < HEIGHT; row++) {
+            for (int col = 0; col < WIDTH; col++) {
+                if (row == target[X] && col == target[Y])
+                    printf("T ");
+                else if (grid[row][col] == UNKNOWN)
+                    printf("_ ");
+                else
+                    printf("%i ", grid[row][col]);
+            }
+            printf("\n");
+        }
     }
 
     MPI_Finalize();
